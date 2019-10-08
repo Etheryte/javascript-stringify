@@ -2,6 +2,22 @@ import { Next } from "./types";
 import { quoteKey } from "./quote";
 import { FunctionParser } from "./function";
 
+function callableToString(
+  callable: Function,
+  indent: string,
+  next: Next,
+  key?: string
+) {
+  const parser = new FunctionParser(callable, indent, next, key);
+  let result = parser.stringify();
+  if (!key) {
+    // Remove 'function ' prefix from getters and setters
+    // TODO: Handle in FunctionParser instead?
+    result = result.replace(/^function /, "");
+  }
+  return indent + result.split("\n").join(`\n${indent}`);
+}
+
 /**
  * Stringify an object of keys and values.
  */
@@ -13,9 +29,19 @@ export function objectToString(obj: any, indent: string, next: Next) {
     .reduce(
       function(values, key) {
         if (typeof obj[key] === "function") {
-          const parser = new FunctionParser(obj[key], indent, next, key);
-          const result = parser.stringify();
-          values.push(indent + result.split("\n").join(`\n${indent}`));
+          values.push(callableToString(obj[key], indent, next, key));
+          return values;
+        }
+
+        // Handle getters & setters
+        const descriptor = Object.getOwnPropertyDescriptor(obj, key);
+        if (descriptor && (descriptor.get || descriptor.set)) {
+          if (descriptor.get) {
+            values.push(callableToString(descriptor.get, indent, next));
+          }
+          if (descriptor.set) {
+            values.push(callableToString(descriptor.set, indent, next));
+          }
           return values;
         }
 
